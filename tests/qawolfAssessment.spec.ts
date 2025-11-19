@@ -1,8 +1,9 @@
-import { test } from '@playwright/test';
+//Commenting out this import statement for now
+//import { test } from '@playwright/test';
 
 const { chromium } = require("playwright");
 
-//Helper function to convert "X minutes/hours/days ago" into numeric minutes
+//Helper function to convert age text into numeric minutes
 function parseAge(text) {
   var parts = text.split(' ');
   var number = parseInt(parts[0], 10);
@@ -23,54 +24,72 @@ function parseAge(text) {
 //Main function that performs the task
 async function sortHackerNewsArticles() {
   //Launch browser
-  var browser = await chromium.launch({ headless: false }); // set headless: true for CI
+  var browser = await chromium.launch({ headless: false });
   var context = await browser.newContext();
   var page = await context.newPage();
 
   //Go to Hacker News "newest" page
-  await page.goto("https://news.ycombinator.com/newest", { waitUntil: 'domcontentloaded' });
+  await page.goto("https://news.ycombinator.com/newest", {
+    waitUntil: 'domcontentloaded'
+  });
 
-  //Get all elements with class '.age' (timestamps)
-  var elements = await page.$$('.age');
-
-  //Extract the first 100 timestamps safely
   var times = [];
-  for (var i = 0; i < Math.min(100, elements.length); i++) {
-    var text = await elements[i].innerText();
-    times.push(text);
+
+  //Pagination: keep collecting until we reach 100
+  while (times.length < 100) {
+    var elements = await page.$$('.age');
+
+    for (var i = 0; i < elements.length && times.length < 100; i++) {
+      var text = await elements[i].innerText();
+      times.push(text);
+    }
+
+    if (times.length >= 100) {
+      break;
+    }
+
+    var moreButton = await page.$('a.morelink');
+    if (!moreButton) {
+      console.error("No more pages available before reaching 100 items");
+      await browser.close();
+      process.exit(1);
+    }
+
+    await moreButton.click();
+    await page.waitForLoadState('domcontentloaded');
   }
 
-  //Validate there are exactly 100 articles
+  //Confirm exactly 100 timestamps collected
   if (times.length !== 100) {
-    console.error('Wait a sec! Expected 100 articles, found ' + times.length);
+    console.error('Wait a sec...Expected 100 articles, found ' + times.length);
     await browser.close();
     process.exit(1);
   }
 
-  //Validate the order: newest → oldest
+  //Validate sorting: newest to oldest
   var sorted = true;
-  for (var i = 1; i < times.length; i++) {
-    var prev = parseAge(times[i - 1]);
-    var curr = parseAge(times[i]);
+  for (var j = 1; j < times.length; j++) {
+    var prev = parseAge(times[j - 1]);
+    var curr = parseAge(times[j]);
 
-    if (curr < prev) { //current is newer than previous → wrong order
+    if (curr < prev) { //found a sorting issue
       sorted = false;
       break;
     }
   }
 
-  //Print result
+//Print result
   if (sorted) {
-    console.log('Nice! The first 100 articles are sorted correctly (newest → oldest).');
+    console.log('SUCCESS! The first 100 articles are sorted correctly.');
   } else {
-    console.error('Wait a sec! The articles are NOT sorted correctly.');
+    console.error('FAIL: Articles are NOT sorted correctly.');
   }
 
-  //Close browser
+ //Close browser
   await browser.close();
 }
 
 //Run the function immediately
-(async function() {
+(async function () {
   await sortHackerNewsArticles();
 })();
