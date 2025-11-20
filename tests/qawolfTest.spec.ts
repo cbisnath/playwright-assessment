@@ -9,7 +9,13 @@ async function sortHackerNewsArticles() {
 
   // go to Hacker News
   await page.goto("https://news.ycombinator.com/newest");
+
 }
+
+//Validate we have exactly 100 articles
+  
+
+//Sort articles from newest to oldest
 
 (async () => {
   await sortHackerNewsArticles();
